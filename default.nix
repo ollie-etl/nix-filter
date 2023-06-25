@@ -35,6 +35,7 @@ rec {
   inDirectory =
     directory:
     args:
+    path_filter:
     let
       # Convert `directory` to a path to clean user input.
       directory_ = _toCleanPath args.root directory;
@@ -42,7 +43,10 @@ rec {
     path: type:
     directory_ == path
     # Add / to the end to make sure we match a full directory prefix
-    || _hasPrefix (directory_ + "/") path;
+    || (
+      (_hasPrefix (directory_ + "/") path)
+      && (path_filter (builtins.baseNameOf path))
+      );
 
   # Match any directory
   isDirectory = _: _: type: type == "directory";
@@ -93,20 +97,20 @@ rec {
   # Lib stuff
 
   # If an argument to include or exclude is a path, transform it to a matcher.
-  #
-  # This probably needs more work, I don't think that it works on
-  # sub-folders.
   _toMatcher = args: f:
     let
       path_ = _toCleanPath args.root f;
+      basename = baseNameOf (toString path_);
+      parent = builtins.dirOf path_;
       pathIsDirectory = _pathIsDirectory path_;
     in
     if builtins.isFunction f then f args
     else path: type:
       (if pathIsDirectory then
-        inDirectory path_ args path type
+        inDirectory path_ args (_: true) path type
       else
-        path_ == path) || args.matchParents
+        inDirectory parent args (f: f == basename) path type
+      ) || args.matchParents
       && type == "directory"
       && _hasPrefix "${path}/" path_;
 
